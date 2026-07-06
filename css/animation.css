@@ -1,0 +1,11 @@
+@keyframes subir {
+    from{
+        transform: translateY(0);
+    }
+    to{
+        transform: translateY(-900px);
+    }
+}
+.strawberry{
+        animation: subir 6s linear infinite;
+}
