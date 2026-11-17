@@ -1,11 +1,22 @@
+/* O morango nasce abaixo da tela e sobe até passar do topo, qualquer que seja a altura. */
 @keyframes subir {
-    from{
-        transform: translateY(0);
+    from {
+        transform: translateY(0) rotate(0deg);
     }
-    to{
-        transform: translateY(-900px);
+    to {
+        transform: translateY(-125vh) rotate(25deg);
     }
 }
-.strawberry{
-        animation: subir 6s linear infinite;
+
+.strawberry {
+    top: 100%;
+    animation: subir 12s linear infinite;
+    will-change: transform;
+}
+
+/* Quem prefere menos movimento vê os morangos parados */
+@media (prefers-reduced-motion: reduce) {
+    .strawberry {
+        animation: none;
+    }
 }

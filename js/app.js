@@ -1,94 +1,201 @@
-
-//encontra o elemento card
+// Elemento onde cada tela é desenhada
 const card = document.getElementById("card");
-//mostra que tela esta sendo renderizada
-let currentScreen = 0;
-//guarda respostas
-const answers = {};
-//decide a tela atual
+// Qual tela está sendo mostrada
+let telaAtual = 0;
+// Respostas: { resumo, zap }
+const respostas = [];
+
+// ---------- utilidades ----------
+
+function criar(tag, classe, texto) {
+    const elemento = document.createElement(tag);
+    if (classe) elemento.className = classe;
+    if (texto !== undefined) elemento.textContent = texto;
+    return elemento;
+}
+
+function criarImagem(src, alt) {
+    const imagem = criar("img", "meme");
+    imagem.src = src;
+    imagem.alt = alt;
+    // se o arquivo não existir, a tela continua sem a imagem
+    imagem.addEventListener("error", () => imagem.remove());
+    return imagem;
+}
+
+function hojeISO() {
+    const agora = new Date();
+    const mes = String(agora.getMonth() + 1).padStart(2, "0");
+    const dia = String(agora.getDate()).padStart(2, "0");
+    return `${agora.getFullYear()}-${mes}-${dia}`;
+}
+
+// "2026-11-20" -> "sexta-feira, 20 de novembro"
+function formatarData(iso) {
+    return new Date(iso + "T00:00:00").toLocaleDateString("pt-BR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+    });
+}
+
+// ---------- desenha a tela atual ----------
+
 function renderScreen() {
-    let screens = screen [currentScreen];
-     card.className = screens.cardSize;
-    card.innerHTML= `<h1 class="title">${screens.title}</h1>`;
-    //decide o tipo de interação a ser gerada
-   switch(screens.type){
-    case "button": renderbutton(screens);
-    break;
-    case "date":
-    case "time":
-     renderinput(screens);
-    break;
-}
-}
-//gera o botão
-function renderbutton(screens){
-    const buttonContainer = document.createElement("div");
-    buttonContainer.classList.add("button-container");  
- screens.options.forEach((option) => {
-    const button = document.createElement('button');
-    button.classList.add("btn");
-    button.textContent = option.text;
-    //efeito do botão correr
-    button.addEventListener('mouseover', () => {
-        if (option.effect === "runaway" ) {
-            button.style.position="absolute";
-            button.style.top = Math.random() * window.innerHeight - 50 + "px";
-            button.style.left = Math.random() * window.innerWidth -100 + "px";
-            const message = option.message;
-            const randomIndex = Math.floor(Math.random() * message.length);
-            button.textContent= message[randomIndex];
-        }
-    })
-    button.addEventListener('click', ()=>{
-        if(option.effect !== "runaway"){
-            answers[screens.key] = option.text;
-            nextscreen()
-        }
-    });
-   buttonContainer.appendChild(button);
- });
- card.appendChild(buttonContainer);
-}
-//gera o input
-function renderinput(screens){
-    const input = document.createElement('input');
-    input.classList.add("input");
-    input.type = screens.input.type;
-    card.appendChild(input);
-     input.placeholder = screens.input.placeholder;
-    const saveButton = document.createElement('button');
-    saveButton.textContent = "marcado";
-    card.appendChild(saveButton);
-     saveButton.addEventListener('click', () => {
-       answers[screens.key] = input.value;
-       nextscreen();
-    });
-}
-//passa pra proxima tela
-function nextscreen(){
-    currentScreen++;
-    if(currentScreen < screen.length) {
-        renderScreen();
+    const tela = telas[telaAtual];
+
+    card.className = tela.cardSize;
+    card.replaceChildren();
+    card.append(criar("p", "progress", `Pergunta ${telaAtual + 1} de ${telas.length}`));
+
+    if (tela.image) card.append(criarImagem(tela.image, tela.alt));
+
+    card.append(criar("h1", "title", tela.title));
+
+    // decide o tipo de interação a ser gerada
+    if (tela.type === "button") {
+        renderButtons(tela);
+    } else {
+        renderInput(tela);
     }
-    else{renderEndScreen();}
 }
-//mostra a tela final
-function renderEndScreen(){
-    card.innerHTML= `<h1>Encontro marcado espero por você</h1>`;
-    for (const key in answers) {card.innerHTML +=`<p>${key} ${answers[key]}`};
-     shareAnswers();
-}
-//compartilhar as respostas com quem enviou o convite
-function shareAnswers() {
-    const shareButton = document.createElement('button');
-    shareButton.textContent = "Compartilhar respostas";
-    shareButton.addEventListener('click', () => {
-        const shareText = Object.entries(answers)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join('\n');
-        const shareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
-        window.open(shareUrl, '_blank');
+
+// ---------- botões ----------
+
+function renderButtons(tela) {
+    const container = criar("div", "button-container");
+
+    tela.options.forEach((opcao) => {
+        const botao = criar("button", "btn", opcao.text);
+        botao.type = "button";
+
+        if (opcao.effect === "runaway") {
+            configurarFuga(botao, opcao.message);
+        } else {
+            botao.addEventListener("click", () => {
+                const valor = opcao.value ?? opcao.text;
+                respostas.push({ resumo: tela.resumo(valor, opcao), zap: tela.zap(valor, opcao) });
+                nextScreen();
+            });
+        }
+
+        container.append(botao);
     });
-    card.appendChild(shareButton);
+
+    card.append(container);
 }
+
+// Botão que corre: funciona com mouse, toque e teclado, e sempre dentro da tela.
+function configurarFuga(botao, mensagens) {
+    let espaco = null;
+    let ultima = -1;
+
+    function fugir(evento) {
+        evento.preventDefault();
+
+        // na primeira vez, deixa um espaço vazio para o layout não pular
+        if (!espaco) {
+            const medida = botao.getBoundingClientRect();
+            espaco = document.createElement("div");
+            espaco.style.width = medida.width + "px";
+            espaco.style.height = medida.height + "px";
+            botao.after(espaco);
+            botao.classList.add("btn-fugitivo");
+            botao.style.position = "fixed";
+        }
+
+        // mensagem diferente da anterior
+        let indice;
+        do {
+            indice = Math.floor(Math.random() * mensagens.length);
+        } while (indice === ultima && mensagens.length > 1);
+        ultima = indice;
+        botao.textContent = mensagens[indice];
+
+        // novo lugar, sempre visível (mede depois de trocar o texto)
+        const margem = 8;
+        const medida = botao.getBoundingClientRect();
+        const maxX = Math.max(margem, window.innerWidth - medida.width - margem);
+        const maxY = Math.max(margem, window.innerHeight - medida.height - margem);
+        botao.style.left = margem + Math.random() * (maxX - margem) + "px";
+        botao.style.top = margem + Math.random() * (maxY - margem) + "px";
+    }
+
+    botao.addEventListener("pointerenter", fugir); // mouse
+    botao.addEventListener("pointerdown", fugir); // toque no celular
+    botao.addEventListener("focus", fugir); // teclado
+    botao.addEventListener("click", (evento) => evento.preventDefault());
+}
+
+// ---------- campos de data e hora ----------
+
+function renderInput(tela) {
+    const rotulo = criar("label", "label", tela.label);
+    rotulo.htmlFor = "campo";
+
+    const campo = document.createElement("input");
+    campo.id = "campo";
+    campo.className = "input";
+    campo.type = tela.input.type;
+    if (tela.type === "date") campo.min = hojeISO();
+
+    const salvar = criar("button", "btn btn-cheio", "Confirmar");
+    salvar.type = "button";
+    salvar.disabled = true;
+
+    // só libera o botão com um valor válido (e data que ainda não passou)
+    campo.addEventListener("input", () => {
+        salvar.disabled = !campo.value || (campo.min && campo.value < campo.min);
+    });
+
+    salvar.addEventListener("click", () => {
+        if (salvar.disabled) return;
+        respostas.push({ resumo: tela.resumo(campo.value), zap: tela.zap(campo.value) });
+        nextScreen();
+    });
+
+    card.append(rotulo, campo, salvar);
+}
+
+// ---------- navegação ----------
+
+function nextScreen() {
+    telaAtual++;
+
+    if (telaAtual < telas.length) {
+        renderScreen();
+    } else {
+        renderEndScreen();
+    }
+}
+
+// ---------- tela final ----------
+
+function renderEndScreen() {
+    card.className = "card-grande";
+    card.replaceChildren();
+
+    card.append(criarImagem(TELA_FINAL.image, TELA_FINAL.alt));
+    card.append(criar("h1", "title", "Encontro marcado! 💕"));
+    card.append(criar("p", "subtitle", "Espero por você."));
+
+    const lista = criar("ul", "resumo");
+    respostas.forEach((resposta) => lista.append(criar("li", "", resposta.resumo)));
+    card.append(lista);
+
+    card.append(criarBotaoWhatsApp());
+}
+
+// Abre o WhatsApp já na conversa de quem mandou o convite, com a mensagem pronta
+function criarBotaoWhatsApp() {
+    const mensagem = respostas.map((resposta) => resposta.zap).join(" ");
+
+    const link = criar("a", "btn btn-cheio", "Enviar minhas respostas no WhatsApp");
+    link.href = `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(mensagem)}`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+
+    return link;
+}
+
 renderScreen();
